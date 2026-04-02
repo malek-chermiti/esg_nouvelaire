@@ -12,7 +12,7 @@ from app.schemas.co2_schemas import (
 
 router = APIRouter(
     prefix="/api/kpi/co2",
-    tags=["CO2 KPI"],
+    tags=["Co2 KPI"],
     responses={404: {"description": "Not found"}},
 )
 
