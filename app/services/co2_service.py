@@ -1,0 +1,87 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import func, extract
+from decimal import Decimal
+from datetime import datetime
+from typing import List
+
+from app.models.models import Co2Emission, Kpi
+from app.schemas.co2_schemas import Co2MonthlyScoreResponse, Co2KpiDetailResponse
+
+
+class Co2Service:
+    """Service for calculating CO2 KPI scores"""
+
+    @staticmethod
+    def get_monthly_co2_score(
+        db: Session,
+        kpi_code: str = "co2",
+        year: int = None
+    ) -> Co2KpiDetailResponse:
+        """
+        Calculate monthly CO2 KPI score.
+        
+        Formula: (sum(co2_kg) / kpi_target) * 100
+        
+        Args:
+            db: Database session
+            kpi_code: KPI code (default: "C02")
+            year: Filter by year (optional)
+        
+        Returns:
+            Co2KpiDetailResponse with monthly scores
+        """
+        
+        # Get KPI details
+        kpi = db.query(Kpi).filter(Kpi.code == kpi_code).first()
+        if not kpi:
+            raise ValueError(f"KPI with code {kpi_code} not found")
+        
+        # Build query for CO2 emissions grouped by month
+        query = db.query(
+            extract('year', Co2Emission.period_date).label('year'),
+            extract('month', Co2Emission.period_date).label('month'),
+            func.sum(Co2Emission.co2_kg).label('total_co2_kg')
+        ).group_by(
+            extract('year', Co2Emission.period_date),
+            extract('month', Co2Emission.period_date)
+        ).order_by(
+            extract('year', Co2Emission.period_date).desc(),
+            extract('month', Co2Emission.period_date).desc()
+        )
+        
+        # Filter by year if provided
+        if year:
+            query = query.filter(
+                extract('year', Co2Emission.period_date) == year
+            )
+        
+        monthly_data = query.all()
+        
+        # Calculate scores and build response
+        monthly_scores = []
+        for row in monthly_data:
+            year_val = int(row.year)
+            month_val = int(row.month)
+            total_co2 = Decimal(str(row.total_co2_kg)) if row.total_co2_kg else Decimal(0)
+            target = Decimal(str(kpi.target)) if kpi.target else Decimal(1)  # Avoid division by zero
+            
+            # Calculate score: (sum(co2) / target) * 100
+            score = (total_co2 / target) * 100 if target > 0 else Decimal(0)
+            
+            month_str = f"{year_val:04d}-{month_val:02d}"
+            
+            monthly_scores.append(
+                Co2MonthlyScoreResponse(
+                    month=month_str,
+                    total_co2_kg=total_co2,
+                    kpi_target=target,
+                    score=score
+                )
+            )
+        
+        return Co2KpiDetailResponse(
+            kpi_code=kpi.code,
+            kpi_name=kpi.name,
+            unit=kpi.unit,
+            monthly_scores=monthly_scores
+        )

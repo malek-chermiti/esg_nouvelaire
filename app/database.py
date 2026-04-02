@@ -9,13 +9,12 @@ MYSQLHOST = "localhost"
 MYSQLPORT = 3306
 
 # MySQL connection URL
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USERNAME}:{DB_PASSWORD}@{MYSQLHOST}:{MYSQLPORT}/esg_nouvelaire"
+SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USERNAME}:{DB_PASSWORD}@{MYSQLHOST}:{MYSQLPORT}/esg_nouvelair"
 
 # Create engine
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     echo=True,  # Set to False in production
-    connect_args={"check_same_thread": False}
 )
 
 # Session factory
