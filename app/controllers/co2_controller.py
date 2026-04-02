@@ -4,7 +4,10 @@ from typing import Optional
 
 from app.database import get_db
 from app.services.co2_service import Co2Service
-from app.schemas.co2_schemas import Co2KpiDetailResponse
+from app.schemas.co2_schemas import (
+    Co2KpiDetailResponse,
+    Co2RouteConsumptionResponse
+)
 
 
 router = APIRouter(
@@ -57,5 +60,46 @@ def get_monthly_co2_score(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get(
+    "/by-route",
+    response_model=Co2RouteConsumptionResponse,
+    summary="Get CO2 consumption by route",
+    description="Get total CO2 consumption grouped by route in tonnes for entire database"
+)
+def get_co2_by_route(
+    db: Session = Depends(get_db)
+):
+    """
+    Get CO2 consumption by route from entire database.
+    
+    - **Returns**: CO2 consumption per route in tonnes, sorted by highest consumption first
+    
+    Example response:
+    ```
+    {
+        "title": "Consommation Carburant par Route",
+        "unit": "tonnes",
+        "total_co2_tonnes": 1200.456,
+        "by_route": [
+            {
+                "route": "TN-001",
+                "co2_tonnes": 500.123
+            },
+            {
+                "route": "TN-002",
+                "co2_tonnes": 300.456
+            }
+        ]
+    }
+    ```
+    """
+    try:
+        return Co2Service.get_co2_by_route(
+            db=db
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

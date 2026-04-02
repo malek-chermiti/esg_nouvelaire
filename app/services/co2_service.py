@@ -5,7 +5,12 @@ from datetime import datetime
 from typing import List
 
 from app.models.models import Co2Emission, Kpi
-from app.schemas.co2_schemas import Co2MonthlyScoreResponse, Co2KpiDetailResponse
+from app.schemas.co2_schemas import (
+    Co2MonthlyScoreResponse,
+    Co2KpiDetailResponse,
+    Co2ByRouteResponse,
+    Co2RouteConsumptionResponse
+)
 
 
 class Co2Service:
@@ -84,4 +89,59 @@ class Co2Service:
             kpi_name=kpi.name,
             unit=kpi.unit,
             monthly_scores=monthly_scores
+        )
+
+    @staticmethod
+    def get_co2_by_route(
+        db: Session
+    ) -> Co2RouteConsumptionResponse:
+        """
+        Get CO2 consumption grouped by route for entire database.
+        
+        Formula: sum(co2_kg) by route, converted to tonnes
+        
+        Args:
+            db: Database session
+        
+        Returns:
+            Co2RouteConsumptionResponse with consumption by route
+        """
+        
+        # Build query for CO2 emissions grouped by route
+        query = db.query(
+            Co2Emission.route,
+            func.sum(Co2Emission.co2_kg).label('total_co2_kg')
+        ).group_by(
+            Co2Emission.route
+        ).order_by(
+            func.sum(Co2Emission.co2_kg).desc()
+        )
+        
+        route_data = query.all()
+        
+        # Calculate consumption by route and build response
+        routes = []
+        total_co2 = Decimal(0)
+        
+        for row in route_data:
+            co2_kg = Decimal(str(row.total_co2_kg)) if row.total_co2_kg else Decimal(0)
+            # Convert kg to tonnes (1 tonne = 1000 kg)
+            co2_tonnes = co2_kg / Decimal(1000)
+            total_co2 += co2_kg
+            
+            routes.append(
+                Co2ByRouteResponse(
+                    route=row.route,
+                    co2_tonnes=co2_tonnes
+                )
+            )
+        
+        # Convert total to tonnes
+        total_co2_tonnes = total_co2 / Decimal(1000)
+        
+        return Co2RouteConsumptionResponse(
+            title="Consommation Carburant par Route",
+            unit="tonnes",
+            total_co2_tonnes=total_co2_tonnes,
+            by_route=routes
         )
