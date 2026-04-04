@@ -4,6 +4,7 @@ from app.controllers.fuel_surcharge_controller import router as fuel_surcharge_r
 from app.controllers.waste_management_controller import router as waste_management_router
 from app.controllers.employee_controller import router as employee_router
 from app.controllers.training_controller import router as training_router
+from app.controllers.work_accident_controller import router as work_accident_router
 
 app = FastAPI(title="ESG Nouvelair API")
 
@@ -13,6 +14,7 @@ app.include_router(fuel_surcharge_router)
 app.include_router(waste_management_router)
 app.include_router(employee_router)
 app.include_router(training_router)
+app.include_router(work_accident_router)
 
 @app.get("/")
 def root():
