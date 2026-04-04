@@ -6,6 +6,7 @@ from app.controllers.employee_controller import router as employee_router
 from app.controllers.training_controller import router as training_router
 from app.controllers.work_accident_controller import router as work_accident_router
 from app.controllers.payment_tracking_controller import router as payment_tracking_router
+from app.controllers.tax_obligation_controller import router as tax_obligation_router
 
 app = FastAPI(title="ESG Nouvelair API")
 
@@ -17,6 +18,7 @@ app.include_router(employee_router)
 app.include_router(training_router)
 app.include_router(work_accident_router)
 app.include_router(payment_tracking_router)
+app.include_router(tax_obligation_router)
 
 @app.get("/")
 def root():
