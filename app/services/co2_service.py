@@ -70,8 +70,9 @@ class Co2Service:
             total_co2 = Decimal(str(row.total_co2_kg)) if row.total_co2_kg else Decimal(0)
             target = Decimal(str(kpi.target)) if kpi.target else Decimal(1)  # Avoid division by zero
             
-            # Calculate score: (sum(co2) / target) * 100
+            # Calculate score: (sum(co2) / target) * 100, capped at 100
             score = (total_co2 / target) * 100 if target > 0 else Decimal(0)
+            score = min(score, Decimal(100))  # Cap at 100
             
             month_str = f"{year_val:04d}-{month_val:02d}"
             

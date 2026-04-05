@@ -68,8 +68,9 @@ class FuelSurchargeService:
             total_amount = Decimal(str(row.total_amount_tnd)) if row.total_amount_tnd else Decimal(0)
             target = Decimal(str(kpi.target)) if kpi.target else Decimal(1)  # Avoid division by zero
             
-            # Calculate score: (sum(amount) / target) * 100
+            # Calculate score: (sum(amount) / target) * 100, capped at 100
             score = (total_amount / target) * 100 if target > 0 else Decimal(0)
+            score = min(score, Decimal(100))  # Cap at 100
             
             month_str = f"{year_val:04d}-{month_val:02d}"
             
