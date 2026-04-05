@@ -5,7 +5,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.services.pillar_service import PillarService
-from app.schemas.pillar_schemas import PillarScoreResponse, GlobalScoreResponse
+from app.schemas.pillar_schemas import PillarScoreResponse, GlobalScoreResponse, EvolutionScoreResponse
 
 # Default year is last year
 DEFAULT_YEAR = datetime.now().year - 1
@@ -135,6 +135,49 @@ def get_global_score(
     """
     try:
         return PillarService.get_global_score(db, year)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get(
+    "/score/evolution",
+    response_model=EvolutionScoreResponse,
+    summary="Get monthly ESG scores evolution",
+    description="Calculate and retrieve monthly ESG scores for 12 months"
+)
+def get_evolution_score(
+    year: Optional[int] = DEFAULT_YEAR,
+    db: Session = Depends(get_db)
+):
+    """
+    Get monthly ESG scores evolution over 12 months.
+    
+    **Parameters:**
+    - **year**: Year filter (YYYY format, default: last year)
+    
+    **Returns**: Monthly scores for:
+    - global: Global ESG score across all pillars
+    - E: Environnement pillar score
+    - S: Social pillar score
+    - G: Gouvernance pillar score
+    
+    **Format**:
+    ```
+    {
+      "labels": ["Jan", "Fév", "Mar", ...],
+      "series": {
+        "global": [score1, score2, ...],
+        "E": [score1, score2, ...],
+        "S": [score1, score2, ...],
+        "G": [score1, score2, ...]
+      }
+    }
+    ```
+    """
+    try:
+        return PillarService.get_monthly_scores(db, year)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

@@ -1,12 +1,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
+from datetime import datetime, timedelta
 from app.models.models import (
     Co2Emission, WasteManagement, FuelSurcharge,
     Employee, Training, WorkAccident,
     PaymentTracking, TaxObligation, AviationLicense,
     Kpi, Pillar
 )
-from app.schemas.pillar_schemas import PillarScoreResponse, KpiScoreDetail, GlobalScoreResponse
+from app.schemas.pillar_schemas import PillarScoreResponse, KpiScoreDetail, GlobalScoreResponse, EvolutionScoreResponse
 
 
 class PillarService:
@@ -32,24 +33,6 @@ class PillarService:
                 query = query.filter(extract('year', Co2Emission.period_date) == year)
             result = query.scalar()
             return float(result) if result else 0.0
-        
-        elif kpi_code == "WASTE_RECYCLE":
-            if year:
-                total = db.query(func.count(WasteManagement.id)).filter(
-                    extract('year', WasteManagement.waste_date) == year
-                ).scalar()
-                recycled = db.query(func.count(WasteManagement.id)).filter(
-                    WasteManagement.is_recycled == 1,
-                    extract('year', WasteManagement.waste_date) == year
-                ).scalar()
-            else:
-                total = db.query(func.count(WasteManagement.id)).scalar()
-                recycled = db.query(func.count(WasteManagement.id)).filter(
-                    WasteManagement.is_recycled == 1
-                ).scalar()
-            if total == 0:
-                return 0.0
-            return round((recycled / total) * 100, 2)
         
         elif kpi_code == "fuel_surcharge":
             query = db.query(func.sum(FuelSurcharge.amount_tnd)).filter(FuelSurcharge.amount_tnd.isnot(None))
@@ -227,4 +210,167 @@ class PillarService:
         return GlobalScoreResponse(
             score_global=round(total_global_score, 2),
             details=details
+        )
+    
+    @staticmethod
+    def get_kpi_realized_value_by_month(db: Session, kpi_code: str, year: int, month: int) -> float:
+        """Get realized value for a specific KPI for a specific month"""
+        
+        # Environnement KPIs
+        if kpi_code == "co2":
+            query = db.query(func.sum(Co2Emission.co2_kg)).filter(
+                Co2Emission.co2_kg.isnot(None),
+                extract('year', Co2Emission.period_date) == year,
+                extract('month', Co2Emission.period_date) == month
+            )
+            result = query.scalar()
+            return float(result) if result else 0.0
+        
+        elif kpi_code == "fuel_surcharge":
+            query = db.query(func.sum(FuelSurcharge.amount_tnd)).filter(
+                FuelSurcharge.amount_tnd.isnot(None),
+                extract('year', FuelSurcharge.period_date) == year,
+                extract('month', FuelSurcharge.period_date) == month
+            )
+            result = query.scalar()
+            return float(result) if result else 0.0
+        
+        # Social KPIs
+        elif kpi_code == "WASTE":
+            total = db.query(func.count(Employee.id)).filter(
+                extract('year', Employee.hire_date) <= year,
+                Employee.is_active.isnot(None)
+            ).scalar()
+            active = db.query(func.count(Employee.id)).filter(
+                Employee.is_active == 1,
+                extract('year', Employee.hire_date) <= year
+            ).scalar()
+            if total == 0:
+                return 0.0
+            return round((active / total) * 100, 2)
+        
+        elif kpi_code == "LTIR":
+            query = db.query(func.count(WorkAccident.id)).filter(
+                extract('year', WorkAccident.accident_date) == year,
+                extract('month', WorkAccident.accident_date) == month
+            )
+            result = query.scalar()
+            return float(result) if result else 0.0
+        
+        elif kpi_code == "PARITE_HF":
+            query = db.query(func.sum(Training.hours)).filter(
+                Training.hours.isnot(None),
+                extract('year', Training.training_date) == year,
+                extract('month', Training.training_date) == month
+            )
+            result = query.scalar()
+            return float(result) if result else 0.0
+        
+        # Gouvernance KPIs
+        elif kpi_code == "PAYMENT_TRACE":
+            total = db.query(func.count(PaymentTracking.id)).filter(
+                extract('year', PaymentTracking.payment_date) == year,
+                extract('month', PaymentTracking.payment_date) == month
+            ).scalar()
+            traceable = db.query(func.count(PaymentTracking.id)).filter(
+                PaymentTracking.is_traceable == 1,
+                extract('year', PaymentTracking.payment_date) == year,
+                extract('month', PaymentTracking.payment_date) == month
+            ).scalar()
+            if total == 0:
+                return 0.0
+            return round((traceable / total) * 100, 2)
+        
+        elif kpi_code == "TAX_OBLIGAT":
+            total = db.query(func.count(TaxObligation.id)).filter(
+                extract('year', TaxObligation.period_start) == year,
+                extract('month', TaxObligation.period_start) == month
+            ).scalar()
+            paid = db.query(func.count(TaxObligation.id)).filter(
+                TaxObligation.status == 'PAID',
+                extract('year', TaxObligation.period_start) == year,
+                extract('month', TaxObligation.period_start) == month
+            ).scalar()
+            if total == 0:
+                return 0.0
+            return round((paid / total) * 100, 2)
+        
+        elif kpi_code == "AVIA_ACTIVE":
+            total = db.query(func.count(AviationLicense.id)).filter(
+                extract('year', AviationLicense.period_date) == year,
+                extract('month', AviationLicense.period_date) == month
+            ).scalar()
+            active = db.query(func.count(AviationLicense.id)).filter(
+                AviationLicense.status == 'ACTIVE',
+                extract('year', AviationLicense.period_date) == year,
+                extract('month', AviationLicense.period_date) == month
+            ).scalar()
+            if total == 0:
+                return 0.0
+            return round((active / total) * 100, 2)
+        
+        return 0.0
+    
+    @staticmethod
+    def get_monthly_scores(db: Session, year: int = None) -> EvolutionScoreResponse:
+        """Calculate monthly ESG scores evolution for 12 months"""
+        if year is None:
+            year = datetime.now().year - 1
+        
+        # Month labels in French
+        month_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
+        
+        # Initialize series
+        series = {
+            "global": [],
+            "E": [],
+            "S": [],
+            "G": []
+        }
+        
+        # Fetch all pillars and KPIs
+        pillars = db.query(Pillar).all()
+        pillar_dict = {p.code: p for p in pillars}
+        kpis = db.query(Kpi).all()
+        kpi_dict = {k.code: k for k in kpis}
+        
+        # Calculate scores for each month
+        for month in range(1, 13):
+            pillar_scores = {}
+            
+            # Calculate each pillar score
+            for pillar in pillars:
+                total_score = 0.0
+                pillar_kpis = [k for k in kpis if k.pillar_id == pillar.id]
+                
+                for kpi in pillar_kpis:
+                    # Get realized value for this month
+                    realized = PillarService.get_kpi_realized_value_by_month(db, kpi.code, year, month)
+                    
+                    # Calculate KPI score
+                    target = float(kpi.target) if kpi.target else 0
+                    score_kpi = PillarService.calculate_kpi_score(realized, target)
+                    
+                    # Add to pillar score with weight
+                    weight = float(kpi.weight) if kpi.weight else 0
+                    total_score += score_kpi * weight
+                
+                pillar_scores[pillar.code] = round(total_score, 2)
+            
+            # Add pillar scores to series
+            series["E"].append(pillar_scores.get('E', 0))
+            series["S"].append(pillar_scores.get('S', 0))
+            series["G"].append(pillar_scores.get('G', 0))
+            
+            # Calculate global score
+            global_score = 0.0
+            for pillar in pillars:
+                pillar_weight = float(pillar.weight) if pillar.weight else 0
+                global_score += pillar_scores.get(pillar.code, 0) * pillar_weight
+            
+            series["global"].append(round(global_score, 2))
+        
+        return EvolutionScoreResponse(
+            labels=month_labels,
+            series=series
         )
