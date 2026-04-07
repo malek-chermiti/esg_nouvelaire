@@ -12,7 +12,8 @@ from app.schemas.user_schemas import (
     UserDeleteResponse,
     UserLogin,
     UserResponse,
-    UserLoginResponse
+    UserLoginResponse,
+    UserLogoutResponse
 )
 from app.models.models import Users
 
@@ -254,3 +255,43 @@ def login_user(
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post(
+    "/logout",
+    response_model=UserLogoutResponse,
+    status_code=status.HTTP_200_OK,
+    summary="User logout",
+    description="Logout user and invalidate session"
+)
+def logout_user(x_user_id: int = Header(default=None)):
+    """
+    Logout a user and invalidate their session.
+    
+    **Parameters**:
+    - **X-User-Id**: User ID header (required)
+    
+    **Returns**: Success logout message
+    
+    Example response on success:
+    ```
+    {
+        "message": "Logout successfully!"
+    }
+    ```
+    """
+    if x_user_id is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing X-User-Id header. User authentication required."
+        )
+    
+    # Session invalidation is simulated here
+    # In a real application, you would:
+    # - Invalidate JWT token
+    # - Delete session from database
+    # - Clear cache
+    
+    return {
+        "message": "Logout successfully!"
+    }

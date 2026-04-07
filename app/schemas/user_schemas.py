@@ -157,3 +157,8 @@ class UserLoginResponse(BaseModel):
     """Schema for successful user login response"""
     message: str
     user: UserResponse
+
+
+class UserLogoutResponse(BaseModel):
+    """Schema for successful user logout response"""
+    message: str
