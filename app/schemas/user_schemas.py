@@ -7,7 +7,7 @@ class UserCreate(BaseModel):
     """Schema for creating a user - all fields required"""
     email: EmailStr = Field(
         ...,
-        example="admin@company.tn",
+        example="t@company.tn",
         description="Adresse email de l'utilisateur (unique)"
     )
     password: str = Field(
@@ -23,7 +23,7 @@ class UserCreate(BaseModel):
     role: str = Field(
         ...,
         example="ADMIN",
-        description="Rôle : ADMIN | MANAGER | ANALYST | VIEWER"
+        description="Rôle : ADMIN | ANALYST"
     )
     is_active: int = Field(
         ...,
@@ -36,6 +36,14 @@ class UserCreate(BaseModel):
     def password_length(cls, v):
         if len(v) < 6:
             raise ValueError('Password must be at least 6 characters long')
+        return v
+
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        valid_roles = ['ADMIN', 'ANALYST']
+        if v not in valid_roles:
+            raise ValueError(f'Role must be one of {valid_roles}')
         return v
 
     class Config:
@@ -56,8 +64,8 @@ class UserUpdate(BaseModel):
     )
     role: Optional[str] = Field(
         None,
-        example="MANAGER",
-        description="Rôle mise à jour : ADMIN | MANAGER | ANALYST | VIEWER"
+        example="ADMIN",
+        description="Rôle mise à jour : ADMIN | ANALYST"
     )
     is_active: Optional[int] = Field(
         None,
@@ -70,6 +78,15 @@ class UserUpdate(BaseModel):
     def validate_password(cls, v):
         if v is not None and len(v) < 6:
             raise ValueError('Password must be at least 6 characters long')
+        return v
+
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v):
+        if v is not None:
+            valid_roles = ['ADMIN', 'ANALYST']
+            if v not in valid_roles:
+                raise ValueError(f'Role must be one of {valid_roles}')
         return v
 
     class Config:
