@@ -93,3 +93,28 @@ class UserService:
         db.commit()
         
         return {"message": f"User {full_name} deleted successfully"}
+    
+    @staticmethod
+    def login_user(db: Session, email: str, password: str) -> dict:
+        """Authenticate user by email and password"""
+        # Check if user exists by email
+        user = db.query(Users).filter(Users.email == email).first()
+        if not user:
+            raise ValueError("User not found")
+        
+        # Hash the input password
+        hashed_password = UserService.hash_password(password)
+        
+        # Compare hashed password with stored password
+        if hashed_password != user.password:
+            raise ValueError("Invalid password")
+        
+        # Check if user is active
+        if not user.is_active:
+            raise ValueError("User is inactive")
+        
+        # Return success response with user data
+        return {
+            "message": "Login successful",
+            "user": UserResponse.from_orm(user)
+        }

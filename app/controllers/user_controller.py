@@ -9,7 +9,10 @@ from app.schemas.user_schemas import (
     UserUpdate,
     UserCreateResponse,
     UserUpdateResponse,
-    UserDeleteResponse
+    UserDeleteResponse,
+    UserLogin,
+    UserResponse,
+    UserLoginResponse
 )
 
 
@@ -165,5 +168,48 @@ def delete_user(
         return UserService.delete_user(db, user_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post(
+    "/login",
+    response_model=UserLoginResponse,
+    status_code=status.HTTP_200_OK,
+    summary="User login",
+    description="Authenticate user with email and password"
+)
+def login_user(
+    user_login: UserLogin,
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate a user with email and password.
+    
+    **Parameters**:
+    - **email**: User email address (unique identifier)
+    - **password**: User password (minimum 6 characters)
+    
+    **Returns**: Success message and authenticated user data
+    
+    Example response on success:
+    ```
+    {
+        "message": "Login successful",
+        "user": {
+            "id": 1,
+            "email": "admin@company.tn",
+            "full_name": "Admin Système",
+            "role": "ADMIN",
+            "is_active": 1,
+            "created_at": "2024-01-01T00:00:00"
+        }
+    }
+    ```
+    """
+    try:
+        return UserService.login_user(db, user_login.email, user_login.password)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

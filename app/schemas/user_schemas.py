@@ -110,3 +110,33 @@ class UserUpdateResponse(BaseModel):
 class UserDeleteResponse(BaseModel):
     """Schema for successful user delete response"""
     message: str
+
+
+class UserLogin(BaseModel):
+    """Schema for user login - email and password required"""
+    email: EmailStr = Field(
+        ...,
+        example="admin@company.tn",
+        description="Adresse email de l'utilisateur (identifiant unique)"
+    )
+    password: str = Field(
+        ...,
+        example="admin1234",
+        description="Mot de passe de l'utilisateur (minimum 6 caractères)"
+    )
+
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters long')
+        return v
+
+    class Config:
+        from_attributes = True
+
+
+class UserLoginResponse(BaseModel):
+    """Schema for successful user login response"""
+    message: str
+    user: UserResponse
