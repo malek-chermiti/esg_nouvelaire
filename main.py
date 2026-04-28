@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.controllers.co2_controller import router as co2_router
 from app.controllers.fuel_surcharge_controller import router as fuel_surcharge_router
 from app.controllers.waste_management_controller import router as waste_management_router
@@ -12,6 +13,15 @@ from app.controllers.user_controller import router as user_router
 from app.controllers.pillar_controller import router as pillar_router
 
 app = FastAPI(title="ESG Nouvelair API")
+
+# Add CORS middleware to handle preflight requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods including OPTIONS
+    allow_headers=["*"],  # Allow all headers
+)
 
 # Include routers
 app.include_router(co2_router)
