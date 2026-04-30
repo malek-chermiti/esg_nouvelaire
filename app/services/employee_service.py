@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from datetime import datetime
+from decimal import Decimal
 
-from app.models.models import Employee
+from app.models.models import Employee, Kpi, Anomaly
 from app.schemas.employee_schemas import (
     GenderCountByDepartment,
     EmployeeGenderStatsResponse
@@ -84,3 +86,78 @@ class EmployeeService:
             global_male_percentage=global_male_percentage,
             by_department=by_department
         )
+
+    @staticmethod
+    def detect_parity_anomalies(db: Session):
+        """
+        Detect anomalies in gender parity (PARITE_HF).
+        
+        Compares global_female_percentage to kpi_target.
+        Creates anomalies if actual value is below target by more than 5%.
+        Direction: HIGHER (anomaly if actual < target)
+        
+        Args:
+            db: Database session
+        """
+        
+        # Get KPI details
+        kpi = db.query(Kpi).filter(Kpi.code == "PARITE_HF").first()
+        if not kpi:
+            raise ValueError("KPI with code PARITE_HF not found")
+        
+        # Get gender statistics
+        gender_stats = EmployeeService.get_gender_stats_by_department(db)
+        detected_value = Decimal(str(gender_stats.global_female_percentage))
+        expected_value = Decimal(str(kpi.target)) if kpi.target is not None else Decimal(0)
+
+        # Calculate gap percentage: ((target - actual) / target) * 100 for HIGHER direction
+        if expected_value > 0:
+            gap = ((expected_value - detected_value) / expected_value) * 100
+        else:
+            gap = Decimal(0)
+
+        # Check if gap exceeds 5% threshold (HIGHER direction: anomaly if actual < target)
+        created_anomalies = []
+
+        if gap > Decimal(5):
+            # Determine severity
+            if gap > 20:
+                severity = "critique"
+            elif gap > 10:
+                severity = "haute"
+            else:
+                severity = "moyenne"
+            
+            # Calculate z-score (using default std_dev = 5.0)
+            std_dev = Decimal("5.0")
+            z_score = (detected_value - expected_value) / std_dev if std_dev > 0 else Decimal(0)
+
+            # Create anomaly description
+            description = f"Écart de {float(gap):.1f}% sous le seuil de parité H/F (cible: {float(expected_value):.1f}%, actuel: {float(detected_value):.1f}%)"
+            
+            # Check if anomaly already exists for this KPI
+            existing_anomaly = db.query(Anomaly).filter(
+                Anomaly.kpi_id == kpi.id,
+                Anomaly.description == description,
+                Anomaly.status == "NEW"
+            ).first()
+            
+            if not existing_anomaly:
+                # Create and save anomaly
+                anomaly = Anomaly(
+                    kpi_id=kpi.id,
+                    detected_value=detected_value,
+                    expected_value=expected_value,
+                    z_score=z_score,
+                    severity=severity,
+                    description=description,
+                    status="NEW",
+                    date_detected=datetime.now()
+                )
+                
+                db.add(anomaly)
+                db.commit()
+                db.refresh(anomaly)
+                created_anomalies.append(anomaly)
+
+            return created_anomalies

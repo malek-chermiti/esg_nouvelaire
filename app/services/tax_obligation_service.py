@@ -2,8 +2,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 from datetime import datetime
 from typing import List
+from decimal import Decimal
 
-from app.models.models import TaxObligation
+from app.models.models import TaxObligation, Kpi, Anomaly
 from app.schemas.tax_obligation_schemas import (
     TaxObligationResponse,
     TaxObligationPeriodResponse,
@@ -97,3 +98,81 @@ class TaxObligationService:
             year=year,
             periods=periods_list
         )
+
+    @staticmethod
+    def detect_monthly_anomalies(db: Session, year: int):
+        """
+        Detect anomalies in monthly Tax Obligations.
+        
+        Compares total_period to kpi_target for each period.
+        Creates anomalies if actual value exceeds target by more than 5%.
+        Direction: LOWER (anomaly if actual > target)
+        
+        Args:
+            db: Database session
+            year: Year to analyze
+        """
+        
+        # Get KPI details
+        kpi = db.query(Kpi).filter(Kpi.code == "TAX_OBLIGAT").first()
+        if not kpi:
+            raise ValueError("KPI with code TAX_OBLIGAT not found")
+        
+        # Get tax obligation data
+        tax_data = TaxObligationService.get_tax_obligations_by_period_and_type(db, year)
+        
+        created_anomalies = []
+
+        for period in tax_data.periods:
+            detected_value = Decimal(str(period.total_period))
+            expected_value = Decimal(str(kpi.target)) if kpi.target is not None else Decimal(0)
+
+            # Calculate gap percentage: ((actual - target) / target) * 100
+            if expected_value > 0:
+                gap = ((detected_value - expected_value) / expected_value) * 100
+            else:
+                gap = Decimal(0)
+
+            # Check if gap exceeds 5% threshold (LOWER direction: anomaly if actual > target)
+            if gap > Decimal(5):
+                # Determine severity
+                if gap > Decimal(20):
+                    severity = "critique"
+                elif gap > Decimal(10):
+                    severity = "haute"
+                else:
+                    severity = "moyenne"
+
+                # Calculate z-score (using default std_dev = 5.0)
+                std_dev = Decimal("5.0")
+                z_score = (detected_value - expected_value) / std_dev if std_dev > 0 else Decimal(0)
+
+                # Create anomaly description
+                description = f"Dépassement de {float(gap):.1f}% du seuil Tax Obligation pour la période {period.period}"
+
+                # Check if anomaly already exists for this KPI and period
+                existing_anomaly = db.query(Anomaly).filter(
+                    Anomaly.kpi_id == kpi.id,
+                    Anomaly.description == description,
+                    Anomaly.status == "NEW"
+                ).first()
+
+                if not existing_anomaly:
+                    # Create and save anomaly
+                    anomaly = Anomaly(
+                        kpi_id=kpi.id,
+                        detected_value=detected_value,
+                        expected_value=expected_value,
+                        z_score=z_score,
+                        severity=severity,
+                        description=description,
+                        status="NEW",
+                        date_detected=datetime.now()
+                    )
+
+                    db.add(anomaly)
+                    db.commit()
+                    db.refresh(anomaly)
+                    created_anomalies.append(anomaly)
+
+        return created_anomalies

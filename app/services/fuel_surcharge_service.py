@@ -4,7 +4,7 @@ from decimal import Decimal
 from datetime import datetime
 from typing import List
 
-from app.models.models import FuelSurcharge, Kpi
+from app.models.models import FuelSurcharge, Kpi, Anomaly
 from app.schemas.fuel_surcharge_schemas import (
     FuelSurchargeMonthlyScoreResponse,
     FuelSurchargeKpiDetailResponse
@@ -89,3 +89,80 @@ class FuelSurchargeService:
             unit=kpi.unit,
             monthly_scores=monthly_scores
         )
+
+    @staticmethod
+    def detect_monthly_anomalies(db: Session, year: int):
+        """
+        Detect anomalies in monthly Fuel Surcharge amounts.
+        
+        Compares total_amount_tnd to kpi_target for each month.
+        Creates anomalies if actual value exceeds target by more than 5%.
+        Direction: LOWER (anomaly if actual > target)
+        
+        Args:
+            db: Database session
+            year: Year to analyze
+        """
+        
+        # Get KPI details
+        kpi = db.query(Kpi).filter(Kpi.code == "fuel_surcharge").first()
+        if not kpi:
+            raise ValueError("KPI with code fuel_surcharge not found")
+        
+        # Get monthly Fuel Surcharge data
+        monthly_scores = FuelSurchargeService.get_monthly_fuel_surcharge_score(db, "fuel_surcharge", year).monthly_scores
+        created_anomalies = []
+        
+        for score in monthly_scores:
+            detected_value = score.total_amount_tnd
+            expected_value = score.kpi_target
+            
+            # Calculate gap percentage: ((actual - target) / target) * 100
+            if expected_value > 0:
+                gap = ((detected_value - expected_value) / expected_value) * 100
+            else:
+                gap = 0
+            
+            # Check if gap exceeds 5% threshold (LOWER direction: anomaly if actual > target)
+            if gap > 5:
+                # Determine severity
+                if gap > 20:
+                    severity = "critique"
+                elif gap > 10:
+                    severity = "haute"
+                else:
+                    severity = "moyenne"
+                
+                # Calculate z-score (using default std_dev = 5.0)
+                std_dev = 5.0
+                z_score = (detected_value - expected_value) / std_dev if std_dev > 0 else 0
+                
+                # Create anomaly description
+                description = f"Dépassement de {gap:.1f}% du seuil Fuel Surcharge pour le mois {score.month}"
+                
+                # Check if anomaly already exists for this KPI and period
+                existing_anomaly = db.query(Anomaly).filter(
+                    Anomaly.kpi_id == kpi.id,
+                    Anomaly.description == description,
+                    Anomaly.status == "NEW"
+                ).first()
+                
+                if not existing_anomaly:
+                    # Create and save anomaly
+                    anomaly = Anomaly(
+                        kpi_id=kpi.id,
+                        detected_value=detected_value,
+                        expected_value=expected_value,
+                        z_score=z_score,
+                        severity=severity,
+                        description=description,
+                        status="NEW",
+                        date_detected=datetime.now()
+                    )
+                    
+                    db.add(anomaly)
+                    db.commit()
+                    db.refresh(anomaly)
+                    created_anomalies.append(anomaly)
+
+        return created_anomalies
