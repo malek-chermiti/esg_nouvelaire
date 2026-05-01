@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List
 
 from app.models.models import Co2Emission, Kpi, Anomaly
+from app.services.ai_service import AIService
 from app.schemas.co2_schemas import (
     Co2MonthlyScoreResponse,
     Co2KpiDetailResponse,
@@ -206,6 +207,14 @@ class Co2Service:
 
                 if existing_anomaly:
                     if existing_anomaly.id not in seen_anomaly_ids:
+                        # Generate recommendation if missing
+                        from app.models.models import Recommendation
+                        has_rec = db.query(Recommendation).filter(Recommendation.anomaly_id == existing_anomaly.id).first()
+                        if not has_rec:
+                            try:
+                                AIService.generate_recommendation(db, existing_anomaly)
+                            except Exception as e:
+                                pass
                         matched_anomalies.append(existing_anomaly)
                         seen_anomaly_ids.add(existing_anomaly.id)
                 else:
@@ -224,6 +233,12 @@ class Co2Service:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
+                    
+                    try:
+                        AIService.generate_recommendation(db, anomaly)
+                    except Exception as e:
+                        pass  # Continue even if AI fails
+                    
                     matched_anomalies.append(anomaly)
                     seen_anomaly_ids.add(anomaly.id)
 

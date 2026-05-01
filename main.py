@@ -13,6 +13,7 @@ from app.controllers.user_controller import router as user_router
 
 from app.controllers.pillar_controller import router as pillar_router
 from app.controllers.anomalies_controller import router as anomalies_router
+from app.controllers.recommendation_controller import router as recommendation_router
 
 app = FastAPI(title="ESG Nouvelair API")
 
@@ -39,6 +40,7 @@ app.include_router(user_router)
 
 app.include_router(pillar_router)
 app.include_router(anomalies_router)
+app.include_router(recommendation_router)
 
 @app.get("/")
 def root():
