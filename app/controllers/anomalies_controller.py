@@ -14,6 +14,9 @@ from app.services.employee_service import EmployeeService
 from app.services.training_service import TrainingService
 from app.services.work_accident_service import WorkAccidentService
 from app.services.tax_obligation_service import TaxObligationService
+from app.services.aviation_license_service import AviationLicenseService
+from app.services.payment_tracking_service import PaymentTrackingService
+from app.services.waste_management_service import WasteManagementService
 
 
 router = APIRouter(
@@ -38,7 +41,7 @@ def detect_anomalies(
     Détecte les anomalies pour un KPI spécifique.
 
     Args:
-        kpi_code: Code du KPI (co2, fuel_surcharge, PARITE_HF, FORMATION, LTIR, TAX_OBLIGAT)
+        kpi_code: Code du KPI (co2, fuel_surcharge, PARITE_HF, FORMATION, LTIR, TAX_OBLIGAT, AVIA_ACTIVE, PAYMENT_TRACE, WASTE)
         year: Année à analyser (optionnel, défaut: année en cours)
         db: Session de base de données
 
@@ -75,6 +78,12 @@ def detect_anomalies(
         created_anomalies = WorkAccidentService.detect_ltir_anomalies(db, year) or []
     elif normalized_kpi_code == "TAX_OBLIGAT":
         created_anomalies = TaxObligationService.detect_monthly_anomalies(db, year) or []
+    elif normalized_kpi_code == "AVIA_ACTIVE":
+        created_anomalies = AviationLicenseService.detect_anomalies(db, year) or []
+    elif normalized_kpi_code == "PAYMENT_TRACE":
+        created_anomalies = PaymentTrackingService.detect_anomalies(db, year) or []
+    elif normalized_kpi_code == "WASTE":
+        created_anomalies = WasteManagementService.detect_anomalies(db, year) or []
 
     return created_anomalies
 
