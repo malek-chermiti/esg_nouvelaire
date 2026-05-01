@@ -184,7 +184,8 @@ class WorkAccidentService:
         # Get monthly LTIR data
         ltir_data = WorkAccidentService.get_ltir_by_month(db, year)
         
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
 
         for period in ltir_data.monthly_data:
             detected_value = Decimal(str(period.ltir))
@@ -216,11 +217,14 @@ class WorkAccidentService:
                 # Check if anomaly already exists for this KPI and period
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
-                
-                if not existing_anomaly:
+                    Anomaly.description.like(f"%{period.month}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
+
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     # Create and save anomaly
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
@@ -236,6 +240,7 @@ class WorkAccidentService:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
-        return created_anomalies
+        return matched_anomalies

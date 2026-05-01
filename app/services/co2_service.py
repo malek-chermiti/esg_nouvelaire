@@ -168,7 +168,8 @@ class Co2Service:
         
         # Get monthly CO2 data
         monthly_scores = Co2Service.get_monthly_co2_score(db, "CO2", year).monthly_scores
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
         
         for score in monthly_scores:
             detected_value = score.total_co2_kg
@@ -200,11 +201,14 @@ class Co2Service:
                 # Check if anomaly already exists for this KPI and period
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
-                
-                if not existing_anomaly:
+                    Anomaly.description.like(f"%{score.month}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
+
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     # Create and save anomaly
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
@@ -220,6 +224,7 @@ class Co2Service:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
-        return created_anomalies
+        return matched_anomalies

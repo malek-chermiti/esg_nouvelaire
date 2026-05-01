@@ -35,7 +35,8 @@ class WasteManagementService:
             raise ValueError("KPI with code WASTE not found")
 
         waste_data = WasteManagementService.get_monthly_recycling_rate(db, "WASTE", year)
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
 
         target_value = Decimal(str(kpi.target)) if kpi.target is not None else Decimal(0)
         recycling_rate_threshold = Decimal(10)
@@ -56,17 +57,20 @@ class WasteManagementService:
 
                 z_score = (detected_weight - target_value) / Decimal("5.0")
                 description = (
-                    f"Dépassement de {float(gap):.1f}% du seuil déchets pour {period.month} "
+                    f"Dépassement de {float(gap):.1f}% pour la période {period.month} "
                     f"(actuel: {float(detected_weight):.3f} kg, cible: {float(target_value):.3f} kg)"
                 )
 
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
+                    Anomaly.description.like(f"%{period.month}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
 
-                if not existing_anomaly:
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
                         detected_value=detected_weight,
@@ -81,7 +85,8 @@ class WasteManagementService:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
             if period.total_weight_kg and recycling_rate < recycling_rate_threshold:
                 gap = ((recycling_rate_threshold - recycling_rate) / recycling_rate_threshold) * Decimal(100)
@@ -95,17 +100,20 @@ class WasteManagementService:
 
                 z_score = (recycling_rate - recycling_rate_threshold) / Decimal("5.0")
                 description = (
-                    f"Taux de recyclage anormalement bas à {float(recycling_rate):.1f}% pour {period.month} "
-                    f"(seuil d'alerte: {float(recycling_rate_threshold):.1f}%)"
+                    f"Performance faible de recyclage: écart de {float(gap):.1f}% pour la période {period.month} "
+                    f"(taux: {float(recycling_rate):.1f}%, seuil d'alerte: {float(recycling_rate_threshold):.1f}%)"
                 )
 
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
+                    Anomaly.description.like(f"%{period.month}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
 
-                if not existing_anomaly:
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
                         detected_value=recycling_rate,
@@ -120,9 +128,10 @@ class WasteManagementService:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
-        return created_anomalies
+        return matched_anomalies
 
 
     @staticmethod

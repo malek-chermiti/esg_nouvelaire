@@ -51,7 +51,8 @@ class PaymentTrackingService:
             extract('month', PaymentTracking.payment_date)
         ).all()
 
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
 
         for row in results:
             year_val = int(row.year)
@@ -66,9 +67,12 @@ class PaymentTrackingService:
                 if total_amount > 0 else Decimal(0)
             )
 
-            expected_value = Decimal(100)
+            expected_value = Decimal(str(kpi.target)) if kpi.target is not None else Decimal(100)
             detected_value = traceability_rate
-            gap = ((expected_value - detected_value) / expected_value) * Decimal(100)
+            if expected_value > 0:
+                gap = ((expected_value - detected_value) / expected_value) * Decimal(100)
+            else:
+                gap = Decimal(0)
 
             if gap > Decimal(0):
                 if gap > Decimal(20):
@@ -82,17 +86,20 @@ class PaymentTrackingService:
                 non_traceable_amount = total_amount - traceable_amount
 
                 description = (
-                    f"Paiements traçables à {float(traceability_rate):.1f}% pour {period_str} "
+                    f"Écart de {float(gap):.1f}% pour la période {period_str} "
                     f"(traçable: {float(traceable_amount):.3f}, non traçable: {float(non_traceable_amount):.3f})"
                 )
 
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
+                    Anomaly.description.like(f"%{period_str}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
 
-                if not existing_anomaly:
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
                         detected_value=detected_value,
@@ -107,9 +114,10 @@ class PaymentTrackingService:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
-        return created_anomalies
+        return matched_anomalies
 
 
     @staticmethod

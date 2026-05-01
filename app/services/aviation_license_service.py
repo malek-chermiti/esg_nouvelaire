@@ -36,7 +36,8 @@ class AviationLicenseService:
             raise ValueError("KPI with code AVIA_ACTIVE not found")
 
         aviation_data = AviationLicenseService.get_active_pending_licenses_by_period_and_type(db, year)
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
 
         previous_period_costs = None
 
@@ -75,9 +76,12 @@ class AviationLicenseService:
                     if compliance_ratios:
                         compliance_score = sum(compliance_ratios) / Decimal(len(compliance_ratios)) * Decimal(100)
                         detected_value = compliance_score
-                        expected_value = Decimal(100)
+                        expected_value = Decimal(str(kpi.target)) if kpi.target is not None else Decimal(100)
 
-                        gap = ((expected_value - detected_value) / expected_value) * Decimal(100)
+                        if expected_value > 0:
+                            gap = ((expected_value - detected_value) / expected_value) * Decimal(100)
+                        else:
+                            gap = Decimal(0)
 
                         if gap > Decimal(0):
                             if gap > Decimal(20):
@@ -90,7 +94,7 @@ class AviationLicenseService:
                             z_score = (detected_value - expected_value) / Decimal("5.0")
 
                             description_parts = [
-                                f"Score de conformité aviation à {float(compliance_score):.1f}% pour {period.period}"
+                                f"Écart de {float(gap):.1f}% pour la période {period.period}"
                             ]
                             if missing_license_types:
                                 description_parts.append(
@@ -105,11 +109,14 @@ class AviationLicenseService:
 
                             existing_anomaly = db.query(Anomaly).filter(
                                 Anomaly.kpi_id == kpi.id,
-                                Anomaly.description == description,
-                                Anomaly.status == "NEW"
-                            ).first()
+                                Anomaly.description.like(f"%{period.period}%")
+                            ).order_by(Anomaly.date_detected.desc()).first()
 
-                            if not existing_anomaly:
+                            if existing_anomaly:
+                                if existing_anomaly.id not in seen_anomaly_ids:
+                                    matched_anomalies.append(existing_anomaly)
+                                    seen_anomaly_ids.add(existing_anomaly.id)
+                            else:
                                 anomaly = Anomaly(
                                     kpi_id=kpi.id,
                                     detected_value=detected_value,
@@ -124,11 +131,12 @@ class AviationLicenseService:
                                 db.add(anomaly)
                                 db.commit()
                                 db.refresh(anomaly)
-                                created_anomalies.append(anomaly)
+                                matched_anomalies.append(anomaly)
+                                seen_anomaly_ids.add(anomaly.id)
 
             previous_period_costs = current_period_costs
 
-        return created_anomalies
+        return matched_anomalies
 
 
     @staticmethod

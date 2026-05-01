@@ -121,7 +121,8 @@ class TaxObligationService:
         # Get tax obligation data
         tax_data = TaxObligationService.get_tax_obligations_by_period_and_type(db, year)
         
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
 
         for period in tax_data.periods:
             detected_value = Decimal(str(period.total_period))
@@ -153,11 +154,14 @@ class TaxObligationService:
                 # Check if anomaly already exists for this KPI and period
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
+                    Anomaly.description.like(f"%{period.period}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
 
-                if not existing_anomaly:
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     # Create and save anomaly
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
@@ -173,6 +177,7 @@ class TaxObligationService:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
-        return created_anomalies
+        return matched_anomalies

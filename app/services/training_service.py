@@ -114,7 +114,8 @@ class TrainingService:
         annual_target = Decimal(str(kpi.target)) if kpi.target is not None else Decimal(0)
         quarterly_target = (annual_target / Decimal(4)) if annual_target > 0 else Decimal(0)
 
-        created_anomalies = []
+        matched_anomalies = []
+        seen_anomaly_ids = set()
 
         for quarter in training_data.quarters:
             detected_value = Decimal(str(quarter.total_hours))
@@ -146,11 +147,14 @@ class TrainingService:
                 # Check if anomaly already exists for this KPI and quarter
                 existing_anomaly = db.query(Anomaly).filter(
                     Anomaly.kpi_id == kpi.id,
-                    Anomaly.description == description,
-                    Anomaly.status == "NEW"
-                ).first()
+                    Anomaly.description.like(f"%{quarter.quarter}%")
+                ).order_by(Anomaly.date_detected.desc()).first()
 
-                if not existing_anomaly:
+                if existing_anomaly:
+                    if existing_anomaly.id not in seen_anomaly_ids:
+                        matched_anomalies.append(existing_anomaly)
+                        seen_anomaly_ids.add(existing_anomaly.id)
+                else:
                     # Create and save anomaly
                     anomaly = Anomaly(
                         kpi_id=kpi.id,
@@ -166,6 +170,7 @@ class TrainingService:
                     db.add(anomaly)
                     db.commit()
                     db.refresh(anomaly)
-                    created_anomalies.append(anomaly)
+                    matched_anomalies.append(anomaly)
+                    seen_anomaly_ids.add(anomaly.id)
 
-        return created_anomalies
+        return matched_anomalies
