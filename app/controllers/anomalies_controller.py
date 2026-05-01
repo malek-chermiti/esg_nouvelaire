@@ -55,37 +55,59 @@ def detect_anomalies(
     if year is None:
         year = datetime.now().year
 
+    year_str = str(year)
     normalized_kpi_code = kpi_code.strip().upper()
 
     kpi = db.query(Kpi).filter(func.upper(Kpi.code) == normalized_kpi_code).first()
     if not kpi:
         raise HTTPException(
             status_code=404,
-            detail=f"KPI code '{kpi_code}' non reconnu. Codes valides: co2, fuel_surcharge, PARITE_HF, FORMATION, LTIR, TAX_OBLIGAT"
+            detail=f"KPI {kpi_code} non trouvé en base."
         )
 
-    # Call the appropriate service method based on kpi_code
-    created_anomalies = []
+    # Trigger anomaly detection to keep DB anomalies up to date.
     if normalized_kpi_code == "CO2":
-        created_anomalies = Co2Service.detect_monthly_anomalies(db, year) or []
+        Co2Service.detect_monthly_anomalies(db, year)
     elif normalized_kpi_code == "FUEL_SURCHARGE":
-        created_anomalies = FuelSurchargeService.detect_monthly_anomalies(db, year) or []
+        FuelSurchargeService.detect_monthly_anomalies(db, year)
     elif normalized_kpi_code == "PARITE_HF":
-        created_anomalies = EmployeeService.detect_parity_anomalies(db) or []
+        EmployeeService.detect_parity_anomalies(db)
     elif normalized_kpi_code == "FORMATION":
-        created_anomalies = TrainingService.detect_quarterly_anomalies(db, year) or []
+        TrainingService.detect_quarterly_anomalies(db, year)
     elif normalized_kpi_code == "LTIR":
-        created_anomalies = WorkAccidentService.detect_ltir_anomalies(db, year) or []
+        WorkAccidentService.detect_ltir_anomalies(db, year)
     elif normalized_kpi_code == "TAX_OBLIGAT":
-        created_anomalies = TaxObligationService.detect_monthly_anomalies(db, year) or []
+        TaxObligationService.detect_monthly_anomalies(db, year)
     elif normalized_kpi_code == "AVIA_ACTIVE":
-        created_anomalies = AviationLicenseService.detect_anomalies(db, year) or []
+        AviationLicenseService.detect_anomalies(db, year)
     elif normalized_kpi_code == "PAYMENT_TRACE":
-        created_anomalies = PaymentTrackingService.detect_anomalies(db, year) or []
+        PaymentTrackingService.detect_anomalies(db, year)
     elif normalized_kpi_code == "WASTE":
-        created_anomalies = WasteManagementService.detect_anomalies(db, year) or []
+        WasteManagementService.detect_anomalies(db, year)
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"KPI code '{kpi_code}' non reconnu. Codes valides: "
+                "co2, fuel_surcharge, PARITE_HF, FORMATION, LTIR, TAX_OBLIGAT, "
+                "AVIA_ACTIVE, PAYMENT_TRACE, WASTE"
+            )
+        )
 
-    return created_anomalies
+    # Read anomalies from DB and filter by kpi and year token in description.
+    all_anomalies = db.query(Anomaly).all()
+
+    filtered_anomalies = []
+    for anomaly in all_anomalies:
+        if anomaly.kpi_id == kpi.id and anomaly.description and year_str in anomaly.description:
+            filtered_anomalies.append(anomaly)
+
+    filtered_anomalies.sort(
+        key=lambda anomaly: anomaly.date_detected or datetime.min,
+        reverse=True
+    )
+
+    return filtered_anomalies
 
 
 @router.get(
@@ -122,7 +144,7 @@ def get_anomalies(
     "/{anomaly_id}/resolve",
     response_model=AnomalyResponse,
     summary="Résoudre une anomalie",
-    description="Change le statut d'une anomalie à 'RESOLVED'."
+    description="Change le statut d'une anomalie à 'RESOLU'."
 )
 def resolve_anomaly(
     anomaly_id: int,

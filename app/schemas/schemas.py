@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 from decimal import Decimal
 
@@ -35,4 +35,4 @@ class AnomalyCreate(BaseModel):
 
 class AnomalyUpdate(BaseModel):
     """Schema for updating anomaly status"""
-    status: str
+    status: Literal["RESOLU"]
