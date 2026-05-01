@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -26,11 +28,27 @@ def get_ai_recommendation(anomaly_id: int, db: Session = Depends(get_db)):
             detail="Aucune analyse disponible pour cette anomalie.",
         )
 
+    structured_description = {}
+    if recommendation.description:
+        try:
+            structured_description = json.loads(recommendation.description)
+        except json.JSONDecodeError:
+            structured_description = {}
+
+    analysis = structured_description.get("analysis") or recommendation.description
+    recommendation_text = structured_description.get("recommendation") or (
+        "Mettre en place un plan d'action correctif, suivre l'indicateur sur les prochains cycles "
+        "et documenter la cause racine pour éviter la recurrence."
+    )
+
     return {
         "status": "Success",
         "data": {
             "title": recommendation.title,
             "priority": recommendation.priority,
+            "analysis": analysis,
+            "recommendation": recommendation_text,
+            "impact_estimated": structured_description.get("impact_estimated", recommendation.impact_estimated),
             "description": recommendation.description,
         },
     }

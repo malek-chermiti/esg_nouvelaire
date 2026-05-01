@@ -31,6 +31,28 @@ class AIService:
             return "MEDIUM"
         return "LOW"
 
+    @staticmethod
+    def _build_structured_payload(
+        *,
+        kpi_code: str,
+        anomaly: Anomaly,
+        analysis: str,
+        recommendation: str,
+        priority: str,
+        impact_estimated: str,
+        title: str,
+    ) -> str:
+        payload = {
+            "title": title,
+            "analysis": analysis,
+            "recommendation": recommendation,
+            "priority": priority,
+            "impact_estimated": impact_estimated,
+            "kpi_code": kpi_code,
+            "anomaly_id": anomaly.id,
+        }
+        return json.dumps(payload, ensure_ascii=False)
+
     @classmethod
     def generate_recommendation(cls, db: Session, anomaly: Anomaly) -> Optional[Recommendation]:
         """
@@ -50,7 +72,10 @@ class AIService:
         prompt = (
             "Tu es un expert ESG pour Nouvelair. Analyse l'anomalie suivante et fournis "
             "une recommandation exploitable. Reponds exclusivement en JSON valide avec les "
-            "champs title, description, priority, impact_estimated.\n\n"
+            "champs title, analysis, recommendation, priority, impact_estimated.\n"
+            "- analysis: diagnostic detaille du probleme, cause probable, impact metier et ESG.\n"
+            "- recommendation: actions concretes et priorisees pour corriger le probleme.\n"
+            "Ecris plusieurs phrases si necessaire et sois plus detaille qu'un simple resume.\n\n"
             f"KPI code: {kpi_code}\n"
             f"Detected value: {anomaly.detected_value}\n"
             f"Target value: {anomaly.expected_value}\n"
@@ -68,7 +93,7 @@ class AIService:
                         "role": "system",
                         "content": (
                             "You are an ESG analyst. Return only a strict JSON object with keys: "
-                            "title, description, priority, impact_estimated."
+                            "title, analysis, recommendation, priority, impact_estimated."
                         ),
                     },
                     {"role": "user", "content": prompt},
@@ -78,13 +103,25 @@ class AIService:
 
             content = response.choices[0].message.content or "{}"
             ai_data = json.loads(content)
+            analysis = (ai_data.get("analysis") or "Aucune analyse detaillee fournie.").strip()
+            recommendation = (ai_data.get("recommendation") or "Aucune recommandation detaillee fournie.").strip()
+            title = ai_data.get("title") or "Recommandation ESG automatique"
+            impact_estimated = ai_data.get("impact_estimated") or "Impact a evaluer"
 
             new_recommendation = Recommendation(
                 anomaly_id=anomaly.id,
-                title=ai_data.get("title") or "Recommandation ESG automatique",
-                description=ai_data.get("description") or "Aucune description detaillee fournie.",
+                title=title,
+                description=cls._build_structured_payload(
+                    kpi_code=kpi_code,
+                    anomaly=anomaly,
+                    analysis=analysis,
+                    recommendation=recommendation,
+                    priority=severity_priority,
+                    impact_estimated=impact_estimated,
+                    title=title,
+                ),
                 priority=severity_priority,
-                impact_estimated=ai_data.get("impact_estimated") or "Impact a evaluer",
+                impact_estimated=impact_estimated,
                 status="PENDING",
             )
 
@@ -101,13 +138,26 @@ class AIService:
             # Create a fallback recommendation without AI
             try:
                 severity_priority = cls._priority_from_severity(anomaly.severity)
+                analysis = (
+                    f"Anomalie detectee pour le KPI {kpi_code}. "
+                    f"Valeur actuelle {anomaly.detected_value} contre cible {anomaly.expected_value}. "
+                    f"{anomaly.description}"
+                )
+                recommendation = (
+                    "Identifier la cause racine, corriger le processus concerne, "
+                    "puis suivre l'amelioration sur les prochains cycles de mesure."
+                )
                 new_recommendation = Recommendation(
                     anomaly_id=anomaly.id,
                     title="Recommandation ESG (mode fallback)",
-                    description=(
-                        f"Anomalie détectée pour le KPI {kpi_code}: "
-                        f"valeur actuelle {anomaly.detected_value} vs cible {anomaly.expected_value}. "
-                        f"{anomaly.description}"
+                    description=cls._build_structured_payload(
+                        kpi_code=kpi_code,
+                        anomaly=anomaly,
+                        analysis=analysis,
+                        recommendation=recommendation,
+                        priority=severity_priority,
+                        impact_estimated="À évaluer",
+                        title="Recommandation ESG (mode fallback)",
                     ),
                     priority=severity_priority,
                     impact_estimated="À évaluer",
