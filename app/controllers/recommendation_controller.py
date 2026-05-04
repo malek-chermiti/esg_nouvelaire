@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import Recommendation
+from app.models.models import Anomaly, Recommendation
+from app.services.ai_service import AIService
 
 
 router = APIRouter(
@@ -17,10 +18,25 @@ router = APIRouter(
     "/anomalies/{anomaly_id}/recommendation",
     summary="Afficher l'analyse et la recommandation",
 )
+@router.get(
+    "/api/anomalies/{anomaly_id}/recommendation",
+    include_in_schema=False,
+)
 def get_ai_recommendation(anomaly_id: int, db: Session = Depends(get_db)):
+    anomaly = db.query(Anomaly).filter(Anomaly.id == anomaly_id).first()
+
+    if not anomaly:
+        raise HTTPException(
+            status_code=404,
+            detail="Anomalie non trouvée.",
+        )
+
     recommendation = db.query(Recommendation).filter(
         Recommendation.anomaly_id == anomaly_id
     ).first()
+
+    if not recommendation:
+        recommendation = AIService.generate_recommendation(db, anomaly)
 
     if not recommendation:
         raise HTTPException(
