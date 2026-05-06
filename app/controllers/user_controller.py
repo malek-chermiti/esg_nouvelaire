@@ -125,7 +125,7 @@ def update_user(
     Only provided fields will be updated:
     - **password**: New password (minimum 6 characters, will be hashed)
     - **full_name**: Updated full name
-    - **role**: Updated role (ADMIN | ANALYST)
+    - **role**: Updated role (valeur libre)
     - **is_active**: Updated active status (1 = active, 0 = inactive)
     
     Example response on success:

@@ -80,14 +80,7 @@ class UserUpdate(BaseModel):
             raise ValueError('Password must be at least 6 characters long')
         return v
 
-    @field_validator('role')
-    @classmethod
-    def validate_role(cls, v):
-        if v is not None:
-            valid_roles = ['ADMIN', 'ANALYST']
-            if v not in valid_roles:
-                raise ValueError(f'Role must be one of {valid_roles}')
-        return v
+
 
     class Config:
         from_attributes = True

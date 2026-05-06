@@ -57,16 +57,14 @@ class UserService:
         user = db.query(Users).filter(Users.id == user_id).first()
         if not user:
             raise ValueError(f"User with id {user_id} not found")
-        
-        # Update only provided fields
-        if user_update.password is not None:
-            user.password = UserService.hash_password(user_update.password)
-        if user_update.full_name is not None:
-            user.full_name = user_update.full_name
-        if user_update.role is not None:
-            user.role = user_update.role
-        if user_update.is_active is not None:
-            user.is_active = user_update.is_active
+
+        # Apply only fields sent in payload. Role is updated exactly as provided.
+        update_data = user_update.model_dump(exclude_unset=True)
+        if "password" in update_data:
+            update_data["password"] = UserService.hash_password(update_data["password"])
+
+        for field, value in update_data.items():
+            setattr(user, field, value)
         
         # Save to database
         db.commit()
