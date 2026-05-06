@@ -106,11 +106,7 @@ class UserService:
         # Compare hashed password with stored password
         if hashed_password != user.password:
             raise ValueError("Invalid password")
-        
-        # Check if user is active
-        if not user.is_active:
-            raise ValueError("User is inactive")
-        
+    
         # Return success response with user data
         return {
             "message": "Login successful",
