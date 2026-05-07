@@ -190,7 +190,7 @@ esg_nouvelaire/
 | **Payment Tracking** | Suivi des paiements | `/payments` |
 | **Tax Obligations** | Obligations fiscales | `/taxes` |
 | **Aviation Licenses** | Licences aviation | `/licenses` |
-| **Users** | Gestion des utilisateurs | `/users` |
+| **Users** | Gestion des utilisateurs par rôle (admin / analyste) | `/users` |
 | **Pillars** | Piliers ESG | `/pillars` |
 
 Consultez la documentation Swagger (`/docs`) pour une liste complète des endpoints.
@@ -215,6 +215,7 @@ curl -X GET http://localhost:8000/employees \
 - Validation des entrées avec Pydantic
 - Sanitization des données en entrée
 - Gestion des erreurs cohérente
+- Endpoints users protégés par `X-User-Id` pour les actions admin et profil
 - Documentation des endpoints sécurisés
 
 ## 🤝 Contribution

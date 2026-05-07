@@ -41,9 +41,58 @@ class UserCreate(BaseModel):
     @field_validator('role')
     @classmethod
     def validate_role(cls, v):
+        normalized_role = v.upper().strip()
         valid_roles = ['ADMIN', 'ANALYST']
-        if v not in valid_roles:
+        if normalized_role not in valid_roles:
             raise ValueError(f'Role must be one of {valid_roles}')
+        return normalized_role
+
+    @field_validator('is_active')
+    @classmethod
+    def validate_status(cls, v):
+        if v not in [0, 1]:
+            raise ValueError('Status must be 1 (active) or 0 (inactive)')
+        return v
+
+    class Config:
+        from_attributes = True
+
+
+class UserAnalystCreate(BaseModel):
+    """Schema for creating an analyst user"""
+    email: EmailStr = Field(
+        ...,
+        example="analyst@company.tn",
+        description="Adresse email de l'analyste (unique)"
+    )
+    password: str = Field(
+        ...,
+        example="analyst1234",
+        description="Mot de passe (minimum 6 caractères)"
+    )
+    full_name: str = Field(
+        ...,
+        example="Analyste ESG",
+        description="Nom complet de l'analyste"
+    )
+    is_active: int = Field(
+        ...,
+        example=1,
+        description="Statut : 1 = actif, 0 = inactif"
+    )
+
+    @field_validator('password')
+    @classmethod
+    def password_length(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters long')
+        return v
+
+    @field_validator('is_active')
+    @classmethod
+    def validate_status(cls, v):
+        if v not in [0, 1]:
+            raise ValueError('Status must be 1 (active) or 0 (inactive)')
         return v
 
     class Config:
@@ -51,36 +100,28 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    """Schema for updating a user - all fields optional"""
-    password: Optional[str] = Field(
-        None,
-        example="newpassword123",
-        description="Nouveau mot de passe (minimum 6 caractères)"
-    )
-    full_name: Optional[str] = Field(
-        None,
-        example="Admin System Updated",
-        description="Nom complet mise à jour"
-    )
-    role: Optional[str] = Field(
-        None,
-        example="ADMIN",
-        description="Rôle mise à jour : ADMIN | ANALYST"
-    )
+    """Schema for updating a user status"""
     is_active: Optional[int] = Field(
         None,
         example=1,
         description="Statut mise à jour : 1 = actif, 0 = inactif"
     )
 
-    @field_validator('password')
+    @field_validator('is_active')
     @classmethod
-    def validate_password(cls, v):
-        if v is not None and len(v) < 6:
-            raise ValueError('Password must be at least 6 characters long')
+    def validate_status(cls, v):
+        if v is not None and v not in [0, 1]:
+            raise ValueError('Status must be 1 (active) or 0 (inactive)')
         return v
 
 
+class UserProfileUpdate(BaseModel):
+    """Schema for updating the connected user's profile"""
+    full_name: Optional[str] = Field(
+        None,
+        example="Admin System Updated",
+        description="Nom complet mise à jour"
+    )
 
     class Config:
         from_attributes = True

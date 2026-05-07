@@ -6,7 +6,9 @@ from app.services.user_service import UserService
 from app.schemas.user_schemas import (
     UserListResponse,
     UserCreate,
+    UserAnalystCreate,
     UserUpdate,
+    UserProfileUpdate,
     UserCreateResponse,
     UserUpdateResponse,
     UserDeleteResponse,
@@ -15,7 +17,6 @@ from app.schemas.user_schemas import (
     UserLoginResponse,
     UserLogoutResponse
 )
-from app.models.models import Users
 
 
 router = APIRouter(
@@ -24,22 +25,18 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-
-
-
-
 @router.get(
     "/",
     response_model=UserListResponse,
     summary="Get all users",
     description="Retrieve all users with total count"
 )
-def get_all_users(db: Session = Depends(get_db)):
+def get_all_users(current_user_id: int = Header(default=None), db: Session = Depends(get_db)):
     """
     Get all users.
-    
+
     **Returns**: List of all users with total count
-    
+
     Example response:
     ```
     {
@@ -58,7 +55,15 @@ def get_all_users(db: Session = Depends(get_db)):
     ```
     """
     try:
-        return UserService.get_all_users(db)
+        if current_user_id is None:
+            raise HTTPException(status_code=401, detail="Missing X-User-Id header. User authentication required.")
+        return UserService.get_all_users(db, current_user_id)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
@@ -67,21 +72,21 @@ def get_all_users(db: Session = Depends(get_db)):
     "/",
     response_model=UserCreateResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a user",
-    description="Create a new user account"
+    summary="Sign up admin",
+    description="Create a new admin account"
 )
 def create_user(
     user_create: UserCreate,
     db: Session = Depends(get_db)
 ):
     """
-    Create a new user with all required fields.
+    Sign up an admin user.
     
     All parameters are required and must be provided:
     - **email**: User email address (must be unique and valid format)
     - **password**: User password (minimum 6 characters)
     - **full_name**: User full name
-    - **role**: User role (ADMIN | ANALYST)
+    - **role**: Must be ADMIN
     - **is_active**: Active status (1 = active, 0 = inactive)
     
     Example response on success:
@@ -101,14 +106,48 @@ def create_user(
     """
     try:
         return UserService.create_user(db, user_create)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+@router.post(
+    "/analysts",
+    response_model=UserCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create analyst",
+    description="Create an analyst account by admin only"
+)
+def create_analyst(
+    user_create: UserAnalystCreate,
+    current_user_id: int = Header(default=None),
+    db: Session = Depends(get_db)
+):
+    """
+    Create an analyst account.
+
+    Only an admin can call this endpoint.
+    The role is forced to ANALYST.
+    """
+    try:
+        if current_user_id is None:
+            raise HTTPException(status_code=401, detail="Missing X-User-Id header. User authentication required.")
+        return UserService.create_analyst(db, current_user_id, user_create)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
 @router.put(
-    "/{user_id}",
+    "/status/{user_id}",
     response_model=UserUpdateResponse,
     status_code=status.HTTP_200_OK,
     summary="Update a user",
@@ -117,15 +156,13 @@ def create_user(
 def update_user(
     user_id: int,
     user_update: UserUpdate,
+    current_user_id: int = Header(default=None),
     db: Session = Depends(get_db)
 ):
     """
-    Update a user by id. All fields are optional.
+    Update a user's status by id.
     
-    Only provided fields will be updated:
-    - **password**: New password (minimum 6 characters, will be hashed)
-    - **full_name**: Updated full name
-    - **role**: Updated role (valeur libre)
+    Only the status can be updated:
     - **is_active**: Updated active status (1 = active, 0 = inactive)
     
     Example response on success:
@@ -144,7 +181,42 @@ def update_user(
     ```
     """
     try:
-        return UserService.update_user(db, user_id, user_update)
+        if current_user_id is None:
+            raise HTTPException(status_code=401, detail="Missing X-User-Id header. User authentication required.")
+        return UserService.update_user_status(db, current_user_id, user_id, user_update)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.put(
+    "/me",
+    response_model=UserUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update my profile",
+    description="Update only the connected user's full name"
+)
+def update_my_profile(
+    profile_update: UserProfileUpdate,
+    current_user_id: int = Header(default=None),
+    db: Session = Depends(get_db)
+):
+    """
+    Update the connected user's profile.
+
+    Only the user's full name can be changed.
+    """
+    try:
+        if current_user_id is None:
+            raise HTTPException(status_code=401, detail="Missing X-User-Id header. User authentication required.")
+        return UserService.update_own_profile(db, current_user_id, profile_update)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -160,6 +232,7 @@ def update_user(
 )
 def delete_user(
     user_id: int,
+    current_user_id: int = Header(default=None),
     db: Session = Depends(get_db)
 ):
     """
@@ -173,9 +246,15 @@ def delete_user(
     ```
     """
     try:
-        return UserService.delete_user(db, user_id)
+        if current_user_id is None:
+            raise HTTPException(status_code=401, detail="Missing X-User-Id header. User authentication required.")
+        return UserService.delete_user(db, current_user_id, user_id)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
