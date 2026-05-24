@@ -16,6 +16,11 @@ class WasteManagementService:
     """Service for calculating Waste Management KPI scores"""
 
     @staticmethod
+    def clamp_score(score: Decimal) -> Decimal:
+        """Keep any score in the 0..100 range."""
+        return min(max(score, Decimal(0)), Decimal(100))
+
+    @staticmethod
     def detect_anomalies(db: Session, year: int = None):
         """
         Detect anomalies for WASTE.
@@ -227,6 +232,7 @@ class WasteManagementService:
             
             # Calculate score: (recycling_rate / target) * 100
             score = (recycling_rate / target) * 100 if target > 0 else Decimal(0)
+            score = WasteManagementService.clamp_score(score)
             
             month_str = f"{year_val:04d}-{month_val:02d}"
             

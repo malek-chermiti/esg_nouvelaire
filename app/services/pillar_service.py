@@ -11,6 +11,10 @@ from app.schemas.pillar_schemas import PillarScoreResponse, KpiScoreDetail, Glob
 
 
 class PillarService:
+    @staticmethod
+    def clamp_score(score: float) -> float:
+        """Keep any score in the 0..100 range."""
+        return round(max(min(score, 100), 0), 2)
     
     @staticmethod
     def calculate_kpi_score(realized: float, target: float) -> float:
@@ -177,7 +181,7 @@ class PillarService:
         
         return PillarScoreResponse(
             pillar=pillar_name,
-            score=round(total_pillar_score, 2),
+            score=PillarService.clamp_score(total_pillar_score),
             weight=round(float(pillar.weight), 2),
             kpis=kpi_scores
         )
@@ -208,7 +212,7 @@ class PillarService:
             total_global_score += pillar_score_response.score * pillar_weight
         
         return GlobalScoreResponse(
-            score_global=round(total_global_score, 2),
+            score_global=PillarService.clamp_score(total_global_score),
             details=details
         )
     
@@ -355,7 +359,7 @@ class PillarService:
                     weight = float(kpi.weight) if kpi.weight else 0
                     total_score += score_kpi * weight
                 
-                pillar_scores[pillar.code] = round(total_score, 2)
+                pillar_scores[pillar.code] = PillarService.clamp_score(total_score)
             
             # Add pillar scores to series
             series["E"].append(pillar_scores.get('E', 0))
@@ -368,7 +372,7 @@ class PillarService:
                 pillar_weight = float(pillar.weight) if pillar.weight else 0
                 global_score += pillar_scores.get(pillar.code, 0) * pillar_weight
             
-            series["global"].append(round(global_score, 2))
+            series["global"].append(PillarService.clamp_score(global_score))
         
         return EvolutionScoreResponse(
             labels=month_labels,

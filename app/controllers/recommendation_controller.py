@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import Anomaly, Recommendation
+from app.models.models import Anomaly, Kpi, Recommendation
 from app.services.ai_service import AIService
 
 
@@ -35,8 +35,25 @@ def get_ai_recommendation(anomaly_id: int, db: Session = Depends(get_db)):
         Recommendation.anomaly_id == anomaly_id
     ).first()
 
+    kpi = db.query(Kpi).filter(Kpi.id == anomaly.kpi_id).first()
+    current_kpi_code = kpi.code if kpi else str(anomaly.kpi_id)
+
     if not recommendation:
         recommendation = AIService.generate_recommendation(db, anomaly)
+    else:
+        structured_description = {}
+        if recommendation.description:
+            try:
+                structured_description = json.loads(recommendation.description)
+            except json.JSONDecodeError:
+                structured_description = {}
+
+        stored_kpi_code = structured_description.get("kpi_code")
+        stored_anomaly_description = (structured_description.get("anomaly_description") or "").strip()
+        current_anomaly_description = (anomaly.description or "").strip()
+
+        if stored_kpi_code != current_kpi_code or stored_anomaly_description != current_anomaly_description:
+            recommendation = AIService.generate_recommendation(db, anomaly)
 
     if not recommendation:
         raise HTTPException(
