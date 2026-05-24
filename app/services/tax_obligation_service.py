@@ -150,7 +150,7 @@ class TaxObligationService:
                 z_score = (detected_value - expected_value) / std_dev if std_dev > 0 else Decimal(0)
 
                 # Create anomaly description
-                description = f"Dépassement de {float(gap):.1f}% du seuil Tax Obligation pour la période {period.period}"
+                description = f"Dépassement de {float(gap):.3f}% du seuil Tax Obligation pour la période {period.period}"
 
                 # Check if anomaly already exists for this KPI and period
                 existing_anomaly = db.query(Anomaly).filter(

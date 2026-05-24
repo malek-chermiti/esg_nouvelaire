@@ -143,7 +143,7 @@ class TrainingService:
                 z_score = (detected_value - expected_value) / std_dev if std_dev > 0 else Decimal(0)
 
                 # Create anomaly description
-                description = f"Écart de {float(gap):.1f}% sous le seuil de formation pour {quarter.quarter} (cible: {float(expected_value):.1f}h, actuel: {float(detected_value):.1f}h)"
+                description = f"Écart de {float(gap):.3f}% sous le seuil de formation pour {quarter.quarter} (cible: {float(expected_value):.3f}h, actuel: {float(detected_value):.3f}h)"
 
                 # Check if anomaly already exists for this KPI and quarter
                 existing_anomaly = db.query(Anomaly).filter(

@@ -1,7 +1,7 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 from typing import Optional, Literal
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class AnomalyBase(BaseModel):
@@ -16,6 +16,13 @@ class AnomalyBase(BaseModel):
     description: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("detected_value", "expected_value", "z_score", when_used="json")
+    def serialize_decimal_fields(self, value):
+        if value is None:
+            return None
+        quantized = Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+        return float(quantized)
 
 
 class AnomalyResponse(AnomalyBase):

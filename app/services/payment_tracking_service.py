@@ -87,7 +87,7 @@ class PaymentTrackingService:
                 non_traceable_amount = total_amount - traceable_amount
 
                 description = (
-                    f"Écart de {float(gap):.1f}% pour la période {period_str} "
+                    f"Écart de {float(gap):.3f}% pour la période {period_str} "
                     f"(traçable: {float(traceable_amount):.3f}, non traçable: {float(non_traceable_amount):.3f})"
                 )
 

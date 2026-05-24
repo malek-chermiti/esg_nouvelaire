@@ -32,6 +32,13 @@ class AIService:
         return "LOW"
 
     @staticmethod
+    def _format_number(value) -> str:
+        try:
+            return f"{float(value):.3f}"
+        except (TypeError, ValueError):
+            return "0.000"
+
+    @staticmethod
     def _kpi_context(kpi_code: str) -> str:
         code = (kpi_code or "").strip().upper()
 
@@ -70,6 +77,8 @@ class AIService:
             "kpi_code": kpi_code,
             "anomaly_description": anomaly_description,
             "anomaly_id": anomaly.id,
+            "detected_value": AIService._format_number(anomaly.detected_value),
+            "expected_value": AIService._format_number(anomaly.expected_value),
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -96,12 +105,12 @@ class AIService:
             "une recommandation exploitable. Reponds exclusivement en JSON valide avec les "
             "champs title, analysis, recommendation, priority, impact_estimated.\n"
             "- analysis: diagnostic detaille du probleme, cause probable, impact metier et ESG.\n"
-            "- recommendation: actions concretes et priorisees pour corriger le probleme. Ne recopie pas la description de l'anomalie; propose une action corrective differente et specifique au KPI.\n"
+            "- recommendation: actions concretes et priorisees pour corriger le probleme. Ne recopie pas la description de l'anomalie; propose une action corrective differente et specifique au KPI. Utilise 3 decimales pour toutes les valeurs numeriques.\n"
             "Ecris plusieurs phrases si necessaire et sois plus detaille qu'un simple resume.\n\n"
             f"KPI code: {kpi_code}\n"
             f"KPI focus: {kpi_context}\n"
-            f"Detected value: {anomaly.detected_value}\n"
-            f"Target value: {anomaly.expected_value}\n"
+            f"Detected value: {cls._format_number(anomaly.detected_value)}\n"
+            f"Target value: {cls._format_number(anomaly.expected_value)}\n"
             f"Anomaly description: {anomaly_description}\n"
             f"Severity: {anomaly.severity}\n"
             "Priority must follow severity mapping: critique=HIGH, haute=MEDIUM, moyenne=LOW."
@@ -166,7 +175,7 @@ class AIService:
                 anomaly_description = (anomaly.description or "").strip()
                 analysis = (
                     f"Anomalie detectee pour le KPI {kpi_code}. "
-                    f"Valeur actuelle {anomaly.detected_value} contre cible {anomaly.expected_value}. "
+                    f"Valeur actuelle {cls._format_number(anomaly.detected_value)} contre cible {cls._format_number(anomaly.expected_value)}. "
                     f"{anomaly_description}"
                 )
                 recommendation = f"{kpi_context} Adapter le plan d'action a l'anomalie: {anomaly_description}. Mettre en place un suivi des corrections sur les prochains cycles de mesure."

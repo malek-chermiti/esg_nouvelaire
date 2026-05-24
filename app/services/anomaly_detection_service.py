@@ -51,7 +51,7 @@ class AnomalyDetectionService:
                             severity=severity,
                             status="NEW",
                             date_detected=datetime.utcnow(),
-                            description=f"{kpi.name}: {gap:.2f}% gap"
+                            description=f"{kpi.name}: {gap:.3f}% gap"
                         )
                         db.add(anomaly)
                         db.commit()
@@ -216,7 +216,7 @@ class AnomalyDetectionService:
                             "month": month,
                             "real_value": real_val,
                             "target": target_value,
-                            "gap_percentage": round(gap, 2),
+                            "gap_percentage": round(gap, 3),
                             "severity": severity,
                             "direction": direction
                         })

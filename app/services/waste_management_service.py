@@ -63,7 +63,7 @@ class WasteManagementService:
 
                 z_score = (detected_weight - target_value) / Decimal("5.0")
                 description = (
-                    f"Dépassement de {float(gap):.1f}% pour la période {period.month} "
+                    f"Dépassement de {float(gap):.3f}% pour la période {period.month} "
                     f"(actuel: {float(detected_weight):.3f} kg, cible: {float(target_value):.3f} kg)"
                 )
 
@@ -120,8 +120,8 @@ class WasteManagementService:
 
                 z_score = (recycling_rate - recycling_rate_threshold) / Decimal("5.0")
                 description = (
-                    f"Performance faible de recyclage: écart de {float(gap):.1f}% pour la période {period.month} "
-                    f"(taux: {float(recycling_rate):.1f}%, seuil d'alerte: {float(recycling_rate_threshold):.1f}%)"
+                    f"Performance faible de recyclage: écart de {float(gap):.3f}% pour la période {period.month} "
+                    f"(taux: {float(recycling_rate):.3f}%, seuil d'alerte: {float(recycling_rate_threshold):.3f}%)"
                 )
 
                 existing_anomaly = db.query(Anomaly).filter(

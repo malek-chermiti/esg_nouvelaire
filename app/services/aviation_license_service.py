@@ -95,7 +95,7 @@ class AviationLicenseService:
                             z_score = (detected_value - expected_value) / Decimal("5.0")
 
                             description_parts = [
-                                f"Écart de {float(gap):.1f}% pour la période {period.period}"
+                                f"Écart de {float(gap):.3f}% pour la période {period.period}"
                             ]
                             if missing_license_types:
                                 description_parts.append(

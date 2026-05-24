@@ -137,8 +137,8 @@ class EmployeeService:
 
             # Create anomaly description
             description = (
-                f"Écart de {float(gap):.1f}% sous le seuil de parité H/F pour la période {period_token} "
-                f"(cible: {float(expected_value):.1f}%, actuel: {float(detected_value):.1f}%)"
+                f"Écart de {float(gap):.3f}% sous le seuil de parité H/F pour la période {period_token} "
+                f"(cible: {float(expected_value):.3f}%, actuel: {float(detected_value):.3f}%)"
             )
             
             # Check if anomaly already exists for this KPI
