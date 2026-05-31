@@ -47,20 +47,11 @@ class PillarService:
         
         # Social KPIs
         elif kpi_code == "WASTE":
+            query = db.query(func.sum(WasteManagement.weight_kg)).filter(WasteManagement.weight_kg.isnot(None))
             if year:
-                total = db.query(func.count(Employee.id)).filter(
-                    extract('year', Employee.hire_date) <= year
-                ).scalar()
-                active = db.query(func.count(Employee.id)).filter(
-                    Employee.is_active == 1,
-                    extract('year', Employee.hire_date) <= year
-                ).scalar()
-            else:
-                total = db.query(func.count(Employee.id)).scalar()
-                active = db.query(func.count(Employee.id)).filter(Employee.is_active == 1).scalar()
-            if total == 0:
-                return 0.0
-            return round((active / total) * 100, 2)
+                query = query.filter(extract('year', WasteManagement.period_date) == year)
+            result = query.scalar()
+            return float(result) if result else 0.0
         
         elif kpi_code == "LTIR":
             query = db.query(func.count(WorkAccident.id))
@@ -70,11 +61,31 @@ class PillarService:
             return float(result) if result else 0.0
         
         elif kpi_code == "PARITE_HF":
+            if year:
+                total = db.query(func.count(Employee.id)).filter(
+                    extract('year', Employee.hire_date) <= year
+                ).scalar()
+                female = db.query(func.count(Employee.id)).filter(
+                    Employee.gender == 'F',
+                    extract('year', Employee.hire_date) <= year
+                ).scalar()
+            else:
+                total = db.query(func.count(Employee.id)).scalar()
+                female = db.query(func.count(Employee.id)).filter(Employee.gender == 'F').scalar()
+            if total == 0:
+                return 0.0
+            return round((female / total) * 100, 2)
+
+        elif kpi_code == "FORMATION":
             query = db.query(func.sum(Training.hours)).filter(Training.hours.isnot(None))
             if year:
                 query = query.filter(extract('year', Training.training_date) == year)
-            result = query.scalar()
-            return float(result) if result else 0.0
+            total_hours = query.scalar() or 0.0
+
+            emp_query = db.query(func.count(Employee.id)).filter(Employee.is_active == 1)
+            total_employees = emp_query.scalar() or 1
+
+            return round(float(total_hours) / float(total_employees), 2)
         
         # Gouvernance KPIs
         elif kpi_code == "PAYMENT_TRACE":
@@ -171,6 +182,18 @@ class PillarService:
                 weight=round(weight, 2)
             ))
         
+        # If a specific year is requested, prefer the average of monthly scores
+        # so the annual pillar score follows the monthly evolution curve.
+        if year is not None:
+            try:
+                evo = PillarService.get_monthly_scores(db, year)
+                month_series = evo.series.get(pillar.code)
+                if month_series and len(month_series) > 0:
+                    avg_month_score = round(sum(month_series) / float(len(month_series)), 2)
+                    total_pillar_score = avg_month_score
+            except Exception:
+                # fall back to computed annual value on any error
+                pass
         # Determine pillar name from code
         pillar_names = {
             'E': 'Environnement',
@@ -337,6 +360,14 @@ class PillarService:
         pillar_dict = {p.code: p for p in pillars}
         kpis = db.query(Kpi).all()
         kpi_dict = {k.code: k for k in kpis}
+
+        # Check if there are any environment data rows for the requested year.
+        env_has_data = (
+            db.query(Co2Emission.id).filter(extract('year', Co2Emission.period_date) == year).first()
+            or db.query(FuelSurcharge.id).filter(extract('year', FuelSurcharge.period_date) == year).first()
+            or db.query(WasteManagement.id).filter(extract('year', WasteManagement.period_date) == year).first()
+        )
+        env_has_data = True if env_has_data else False
         
         # Calculate scores for each month
         for month in range(1, 13):
@@ -349,7 +380,10 @@ class PillarService:
                 
                 for kpi in pillar_kpis:
                     # Get realized value for this month
-                    realized = PillarService.get_kpi_realized_value_by_month(db, kpi.code, year, month)
+                    if pillar.code == 'E' and not env_has_data:
+                        realized = 0.0
+                    else:
+                        realized = PillarService.get_kpi_realized_value_by_month(db, kpi.code, year, month)
                     
                     # Calculate KPI score
                     target = float(kpi.target) if kpi.target else 0
