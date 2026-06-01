@@ -24,7 +24,7 @@ for anomaly in recent_anomalies:
 print()
 print("=" * 60)
 if recommendation_count == 0:
-    print("⚠️  WARNING: No recommendations found in database!")
+    print("WARNING: No recommendations found in database!")
     print("   This suggests AIService.generate_recommendation() is not creating records.")
 else:
     print(f"✓ {recommendation_count} recommendations found")
